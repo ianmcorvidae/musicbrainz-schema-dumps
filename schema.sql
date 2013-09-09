@@ -2576,7 +2576,9 @@ CREATE TABLE area_alias (
     end_date_month smallint,
     end_date_day smallint,
     primary_for_locale boolean DEFAULT false NOT NULL,
+    ended boolean DEFAULT false NOT NULL,
     CONSTRAINT area_alias_edits_pending_check CHECK ((edits_pending >= 0)),
+    CONSTRAINT area_alias_ended_check CHECK ((((((end_date_year IS NOT NULL) OR (end_date_month IS NOT NULL)) OR (end_date_day IS NOT NULL)) AND (ended = true)) OR (((end_date_year IS NULL) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)))),
     CONSTRAINT primary_check CHECK ((((locale IS NULL) AND (primary_for_locale IS FALSE)) OR (locale IS NOT NULL)))
 );
 
@@ -2723,8 +2725,8 @@ ALTER SEQUENCE area_type_id_seq OWNED BY area_type.id;
 CREATE TABLE artist (
     id integer NOT NULL,
     gid uuid NOT NULL,
-    name integer NOT NULL,
-    sort_name integer NOT NULL,
+    name character varying NOT NULL,
+    sort_name character varying NOT NULL,
     begin_date_year smallint,
     begin_date_month smallint,
     begin_date_day smallint,
@@ -2744,7 +2746,11 @@ CREATE TABLE artist (
     CONSTRAINT artist_edits_pending_check CHECK ((edits_pending >= 0)),
     CONSTRAINT artist_ended_check CHECK ((((((end_date_year IS NOT NULL) OR (end_date_month IS NOT NULL)) OR (end_date_day IS NOT NULL)) AND (ended = true)) OR (((end_date_year IS NULL) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)))),
     CONSTRAINT artist_va_check CHECK (((id <> 1) OR (((((((((((type = 3) AND (gender IS NULL)) AND (area IS NULL)) AND (begin_area IS NULL)) AND (end_area IS NULL)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)))),
-    CONSTRAINT group_type_implies_null_gender CHECK ((((gender IS NULL) AND (type = 2)) OR (type IS DISTINCT FROM 2)))
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT control_for_whitespace_sort_name CHECK (controlled_for_whitespace((sort_name)::text)),
+    CONSTRAINT group_type_implies_null_gender CHECK ((((gender IS NULL) AND (type = 2)) OR (type IS DISTINCT FROM 2))),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
+    CONSTRAINT only_non_empty_sort_name CHECK (((sort_name)::text <> ''::text))
 );
 
 
@@ -2757,12 +2763,12 @@ ALTER TABLE musicbrainz.artist OWNER TO musicbrainz;
 CREATE TABLE artist_alias (
     id integer NOT NULL,
     artist integer NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     locale text,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
     type integer,
-    sort_name integer NOT NULL,
+    sort_name character varying NOT NULL,
     begin_date_year smallint,
     begin_date_month smallint,
     begin_date_day smallint,
@@ -2770,9 +2776,15 @@ CREATE TABLE artist_alias (
     end_date_month smallint,
     end_date_day smallint,
     primary_for_locale boolean DEFAULT false NOT NULL,
+    ended boolean DEFAULT false NOT NULL,
     CONSTRAINT artist_alias_edits_pending_check CHECK ((edits_pending >= 0)),
+    CONSTRAINT artist_alias_ended_check CHECK ((((((end_date_year IS NOT NULL) OR (end_date_month IS NOT NULL)) OR (end_date_day IS NOT NULL)) AND (ended = true)) OR (((end_date_year IS NULL) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)))),
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT control_for_whitespace_sort_name CHECK (controlled_for_whitespace((sort_name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
+    CONSTRAINT only_non_empty_sort_name CHECK (((sort_name)::text <> ''::text)),
     CONSTRAINT primary_check CHECK ((((locale IS NULL) AND (primary_for_locale IS FALSE)) OR (locale IS NOT NULL))),
-    CONSTRAINT search_hints_are_empty CHECK (((type <> 3) OR ((((((((((type = 3) AND (sort_name = name)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)) AND (primary_for_locale IS FALSE)) AND (locale IS NULL))))
+    CONSTRAINT search_hints_are_empty CHECK (((type <> 3) OR ((((((((((type = 3) AND ((sort_name)::text = (name)::text)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)) AND (primary_for_locale IS FALSE)) AND (locale IS NULL))))
 );
 
 
@@ -2850,10 +2862,12 @@ ALTER TABLE musicbrainz.artist_annotation OWNER TO musicbrainz;
 
 CREATE TABLE artist_credit (
     id integer NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     artist_count smallint NOT NULL,
     ref_count integer DEFAULT 0,
-    created timestamp with time zone DEFAULT now()
+    created timestamp with time zone DEFAULT now(),
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
 );
 
 
@@ -2888,8 +2902,10 @@ CREATE TABLE artist_credit_name (
     artist_credit integer NOT NULL,
     "position" smallint NOT NULL,
     artist integer NOT NULL,
-    name integer NOT NULL,
-    join_phrase text DEFAULT ''::text NOT NULL
+    name character varying NOT NULL,
+    join_phrase text DEFAULT ''::text NOT NULL,
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
 );
 
 
@@ -2901,7 +2917,7 @@ ALTER TABLE musicbrainz.artist_credit_name OWNER TO musicbrainz;
 
 CREATE TABLE artist_deletion (
     gid uuid NOT NULL,
-    last_known_name integer NOT NULL,
+    last_known_name character varying NOT NULL,
     last_known_comment text NOT NULL,
     deleted_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -2988,41 +3004,6 @@ CREATE TABLE artist_meta (
 
 
 ALTER TABLE musicbrainz.artist_meta OWNER TO musicbrainz;
-
---
--- Name: artist_name; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE artist_name (
-    id integer NOT NULL,
-    name character varying NOT NULL,
-    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
-    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
-);
-
-
-ALTER TABLE musicbrainz.artist_name OWNER TO musicbrainz;
-
---
--- Name: artist_name_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE artist_name_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.artist_name_id_seq OWNER TO musicbrainz;
-
---
--- Name: artist_name_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE artist_name_id_seq OWNED BY artist_name.id;
-
 
 --
 -- Name: artist_rating_raw; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
@@ -3255,40 +3236,6 @@ ALTER SEQUENCE cdtoc_raw_id_seq OWNED BY cdtoc_raw.id;
 
 
 --
--- Name: clientversion; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE clientversion (
-    id integer NOT NULL,
-    version character varying(64) NOT NULL,
-    created timestamp with time zone DEFAULT now()
-);
-
-
-ALTER TABLE musicbrainz.clientversion OWNER TO musicbrainz;
-
---
--- Name: clientversion_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE clientversion_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.clientversion_id_seq OWNER TO musicbrainz;
-
---
--- Name: clientversion_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE clientversion_id_seq OWNED BY clientversion.id;
-
-
---
 -- Name: country_area; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -3477,7 +3424,8 @@ CREATE TABLE editor (
     gender integer,
     area integer,
     password character varying(128) NOT NULL,
-    ha1 character(32) NOT NULL
+    ha1 character(32) NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -5382,8 +5330,8 @@ ALTER SEQUENCE l_work_work_id_seq OWNED BY l_work_work.id;
 CREATE TABLE label (
     id integer NOT NULL,
     gid uuid NOT NULL,
-    name integer NOT NULL,
-    sort_name integer NOT NULL,
+    name character varying NOT NULL,
+    sort_name character varying NOT NULL,
     begin_date_year smallint,
     begin_date_month smallint,
     begin_date_day smallint,
@@ -5397,10 +5345,12 @@ CREATE TABLE label (
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
     ended boolean DEFAULT false NOT NULL,
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
     CONSTRAINT label_comment_check CHECK (controlled_for_whitespace((comment)::text)),
     CONSTRAINT label_edits_pending_check CHECK ((edits_pending >= 0)),
     CONSTRAINT label_ended_check CHECK ((((((end_date_year IS NOT NULL) OR (end_date_month IS NOT NULL)) OR (end_date_day IS NOT NULL)) AND (ended = true)) OR (((end_date_year IS NULL) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)))),
-    CONSTRAINT label_label_code_check CHECK (((label_code > 0) AND (label_code < 100000)))
+    CONSTRAINT label_label_code_check CHECK (((label_code > 0) AND (label_code < 100000))),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
 );
 
 
@@ -5413,12 +5363,12 @@ ALTER TABLE musicbrainz.label OWNER TO musicbrainz;
 CREATE TABLE label_alias (
     id integer NOT NULL,
     label integer NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     locale text,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
     type integer,
-    sort_name integer NOT NULL,
+    sort_name character varying NOT NULL,
     begin_date_year smallint,
     begin_date_month smallint,
     begin_date_day smallint,
@@ -5426,9 +5376,15 @@ CREATE TABLE label_alias (
     end_date_month smallint,
     end_date_day smallint,
     primary_for_locale boolean DEFAULT false NOT NULL,
+    ended boolean DEFAULT false NOT NULL,
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT control_for_whitespace_sort_name CHECK (controlled_for_whitespace((sort_name)::text)),
     CONSTRAINT label_alias_edits_pending_check CHECK ((edits_pending >= 0)),
+    CONSTRAINT label_alias_ended_check CHECK ((((((end_date_year IS NOT NULL) OR (end_date_month IS NOT NULL)) OR (end_date_day IS NOT NULL)) AND (ended = true)) OR (((end_date_year IS NULL) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)))),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
+    CONSTRAINT only_non_empty_sort_name CHECK (((sort_name)::text <> ''::text)),
     CONSTRAINT primary_check CHECK ((((locale IS NULL) AND (primary_for_locale IS FALSE)) OR (locale IS NOT NULL))),
-    CONSTRAINT search_hints_are_empty CHECK (((type <> 2) OR ((((((((((type = 2) AND (sort_name = name)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)) AND (primary_for_locale IS FALSE)) AND (locale IS NULL))))
+    CONSTRAINT search_hints_are_empty CHECK (((type <> 2) OR ((((((((((type = 2) AND ((sort_name)::text = (name)::text)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)) AND (primary_for_locale IS FALSE)) AND (locale IS NULL))))
 );
 
 
@@ -5506,7 +5462,7 @@ ALTER TABLE musicbrainz.label_annotation OWNER TO musicbrainz;
 
 CREATE TABLE label_deletion (
     gid uuid NOT NULL,
-    last_known_name integer NOT NULL,
+    last_known_name character varying NOT NULL,
     last_known_comment text NOT NULL,
     deleted_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -5593,41 +5549,6 @@ CREATE TABLE label_meta (
 
 
 ALTER TABLE musicbrainz.label_meta OWNER TO musicbrainz;
-
---
--- Name: label_name; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE label_name (
-    id integer NOT NULL,
-    name character varying NOT NULL,
-    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
-    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
-);
-
-
-ALTER TABLE musicbrainz.label_name OWNER TO musicbrainz;
-
---
--- Name: label_name_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE label_name_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.label_name_id_seq OWNER TO musicbrainz;
-
---
--- Name: label_name_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE label_name_id_seq OWNED BY label_name.id;
-
 
 --
 -- Name: label_rating_raw; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
@@ -6048,52 +5969,20 @@ CREATE TABLE medium_index (
 ALTER TABLE musicbrainz.medium_index OWNER TO musicbrainz;
 
 --
--- Name: puid; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE puid (
-    id integer NOT NULL,
-    puid character(36) NOT NULL,
-    version integer NOT NULL
-);
-
-
-ALTER TABLE musicbrainz.puid OWNER TO musicbrainz;
-
---
--- Name: puid_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE puid_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.puid_id_seq OWNER TO musicbrainz;
-
---
--- Name: puid_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE puid_id_seq OWNED BY puid.id;
-
-
---
 -- Name: recording; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
 CREATE TABLE recording (
     id integer NOT NULL,
     gid uuid NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     artist_credit integer NOT NULL,
     length integer,
     comment character varying(255) DEFAULT ''::character varying NOT NULL,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
     CONSTRAINT recording_comment_check CHECK (controlled_for_whitespace((comment)::text)),
     CONSTRAINT recording_edits_pending_check CHECK ((edits_pending >= 0)),
     CONSTRAINT recording_length_check CHECK (((length IS NULL) OR (length > 0)))
@@ -6163,43 +6052,6 @@ CREATE TABLE recording_meta (
 ALTER TABLE musicbrainz.recording_meta OWNER TO musicbrainz;
 
 --
--- Name: recording_puid; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE recording_puid (
-    id integer NOT NULL,
-    puid integer NOT NULL,
-    recording integer NOT NULL,
-    edits_pending integer DEFAULT 0 NOT NULL,
-    created timestamp with time zone DEFAULT now(),
-    CONSTRAINT recording_puid_edits_pending_check CHECK ((edits_pending >= 0))
-);
-
-
-ALTER TABLE musicbrainz.recording_puid OWNER TO musicbrainz;
-
---
--- Name: recording_puid_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE recording_puid_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.recording_puid_id_seq OWNER TO musicbrainz;
-
---
--- Name: recording_puid_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE recording_puid_id_seq OWNED BY recording_puid.id;
-
-
---
 -- Name: recording_rating_raw; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -6247,7 +6099,7 @@ ALTER TABLE musicbrainz.recording_tag_raw OWNER TO musicbrainz;
 CREATE TABLE release (
     id integer NOT NULL,
     gid uuid NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     artist_credit integer NOT NULL,
     release_group integer NOT NULL,
     status integer,
@@ -6259,6 +6111,8 @@ CREATE TABLE release (
     edits_pending integer DEFAULT 0 NOT NULL,
     quality smallint DEFAULT (-1) NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
     CONSTRAINT release_comment_check CHECK (controlled_for_whitespace((comment)::text)),
     CONSTRAINT release_edits_pending_check CHECK ((edits_pending >= 0))
 );
@@ -6326,12 +6180,14 @@ ALTER TABLE musicbrainz.release_gid_redirect OWNER TO musicbrainz;
 CREATE TABLE release_group (
     id integer NOT NULL,
     gid uuid NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     artist_credit integer NOT NULL,
     type integer,
     comment character varying(255) DEFAULT ''::character varying NOT NULL,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
     CONSTRAINT release_group_comment_check CHECK (controlled_for_whitespace((comment)::text)),
     CONSTRAINT release_group_edits_pending_check CHECK ((edits_pending >= 0))
 );
@@ -6597,41 +6453,6 @@ CREATE TABLE release_meta (
 
 
 ALTER TABLE musicbrainz.release_meta OWNER TO musicbrainz;
-
---
--- Name: release_name; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE release_name (
-    id integer NOT NULL,
-    name character varying NOT NULL,
-    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
-    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
-);
-
-
-ALTER TABLE musicbrainz.release_name OWNER TO musicbrainz;
-
---
--- Name: release_name_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE release_name_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.release_name_id_seq OWNER TO musicbrainz;
-
---
--- Name: release_name_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE release_name_id_seq OWNED BY release_name.id;
-
 
 --
 -- Name: release_packaging; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
@@ -6948,11 +6769,13 @@ CREATE TABLE track (
     medium integer NOT NULL,
     "position" integer NOT NULL,
     number text NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     artist_credit integer NOT NULL,
     length integer,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
     CONSTRAINT track_edits_pending_check CHECK ((edits_pending >= 0)),
     CONSTRAINT track_length_check CHECK (((length IS NULL) OR (length > 0))),
     CONSTRAINT track_number_check CHECK (controlled_for_whitespace(number))
@@ -6993,41 +6816,6 @@ ALTER TABLE musicbrainz.track_id_seq OWNER TO musicbrainz;
 --
 
 ALTER SEQUENCE track_id_seq OWNED BY track.id;
-
-
---
--- Name: track_name; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE track_name (
-    id integer NOT NULL,
-    name character varying NOT NULL,
-    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
-    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
-);
-
-
-ALTER TABLE musicbrainz.track_name OWNER TO musicbrainz;
-
---
--- Name: track_name_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE track_name_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.track_name_id_seq OWNER TO musicbrainz;
-
---
--- Name: track_name_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE track_name_id_seq OWNED BY track_name.id;
 
 
 --
@@ -7160,12 +6948,14 @@ ALTER SEQUENCE vote_id_seq OWNED BY vote.id;
 CREATE TABLE work (
     id integer NOT NULL,
     gid uuid NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     type integer,
     comment character varying(255) DEFAULT ''::character varying NOT NULL,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
     language integer,
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
     CONSTRAINT work_comment_check CHECK (controlled_for_whitespace((comment)::text)),
     CONSTRAINT work_edits_pending_check CHECK ((edits_pending >= 0))
 );
@@ -7180,12 +6970,12 @@ ALTER TABLE musicbrainz.work OWNER TO musicbrainz;
 CREATE TABLE work_alias (
     id integer NOT NULL,
     work integer NOT NULL,
-    name integer NOT NULL,
+    name character varying NOT NULL,
     locale text,
     edits_pending integer DEFAULT 0 NOT NULL,
     last_updated timestamp with time zone DEFAULT now(),
     type integer,
-    sort_name integer NOT NULL,
+    sort_name character varying NOT NULL,
     begin_date_year smallint,
     begin_date_month smallint,
     begin_date_day smallint,
@@ -7193,9 +6983,15 @@ CREATE TABLE work_alias (
     end_date_month smallint,
     end_date_day smallint,
     primary_for_locale boolean DEFAULT false NOT NULL,
+    ended boolean DEFAULT false NOT NULL,
+    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
+    CONSTRAINT control_for_whitespace_sort_name CHECK (controlled_for_whitespace((sort_name)::text)),
+    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text)),
+    CONSTRAINT only_non_empty_sort_name CHECK (((sort_name)::text <> ''::text)),
     CONSTRAINT primary_check CHECK ((((locale IS NULL) AND (primary_for_locale IS FALSE)) OR (locale IS NOT NULL))),
-    CONSTRAINT search_hints_are_empty CHECK (((type <> 2) OR ((((((((((type = 2) AND (sort_name = name)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)) AND (primary_for_locale IS FALSE)) AND (locale IS NULL)))),
-    CONSTRAINT work_alias_edits_pending_check CHECK ((edits_pending >= 0))
+    CONSTRAINT search_hints_are_empty CHECK (((type <> 2) OR ((((((((((type = 2) AND ((sort_name)::text = (name)::text)) AND (begin_date_year IS NULL)) AND (begin_date_month IS NULL)) AND (begin_date_day IS NULL)) AND (end_date_year IS NULL)) AND (end_date_month IS NULL)) AND (end_date_day IS NULL)) AND (primary_for_locale IS FALSE)) AND (locale IS NULL)))),
+    CONSTRAINT work_alias_edits_pending_check CHECK ((edits_pending >= 0)),
+    CONSTRAINT work_alias_ended_check CHECK ((((((end_date_year IS NOT NULL) OR (end_date_month IS NOT NULL)) OR (end_date_day IS NOT NULL)) AND (ended = true)) OR (((end_date_year IS NULL) AND (end_date_month IS NULL)) AND (end_date_day IS NULL))))
 );
 
 
@@ -7420,41 +7216,6 @@ CREATE TABLE work_meta (
 
 
 ALTER TABLE musicbrainz.work_meta OWNER TO musicbrainz;
-
---
--- Name: work_name; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE TABLE work_name (
-    id integer NOT NULL,
-    name character varying NOT NULL,
-    CONSTRAINT control_for_whitespace CHECK (controlled_for_whitespace((name)::text)),
-    CONSTRAINT only_non_empty CHECK (((name)::text <> ''::text))
-);
-
-
-ALTER TABLE musicbrainz.work_name OWNER TO musicbrainz;
-
---
--- Name: work_name_id_seq; Type: SEQUENCE; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE SEQUENCE work_name_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE musicbrainz.work_name_id_seq OWNER TO musicbrainz;
-
---
--- Name: work_name_id_seq; Type: SEQUENCE OWNED BY; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER SEQUENCE work_name_id_seq OWNED BY work_name.id;
-
 
 --
 -- Name: work_rating_raw; Type: TABLE; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
@@ -7709,13 +7470,6 @@ ALTER TABLE ONLY artist_credit ALTER COLUMN id SET DEFAULT nextval('artist_credi
 -- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
 --
 
-ALTER TABLE ONLY artist_name ALTER COLUMN id SET DEFAULT nextval('artist_name_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
 ALTER TABLE ONLY artist_type ALTER COLUMN id SET DEFAULT nextval('artist_type_id_seq'::regclass);
 
 
@@ -7745,13 +7499,6 @@ ALTER TABLE ONLY cdtoc ALTER COLUMN id SET DEFAULT nextval('cdtoc_id_seq'::regcl
 --
 
 ALTER TABLE ONLY cdtoc_raw ALTER COLUMN id SET DEFAULT nextval('cdtoc_raw_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY clientversion ALTER COLUMN id SET DEFAULT nextval('clientversion_id_seq'::regclass);
 
 
 --
@@ -8122,13 +7869,6 @@ ALTER TABLE ONLY label_alias_type ALTER COLUMN id SET DEFAULT nextval('label_ali
 -- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
 --
 
-ALTER TABLE ONLY label_name ALTER COLUMN id SET DEFAULT nextval('label_name_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
 ALTER TABLE ONLY label_type ALTER COLUMN id SET DEFAULT nextval('label_type_id_seq'::regclass);
 
 
@@ -8185,21 +7925,7 @@ ALTER TABLE ONLY medium_format ALTER COLUMN id SET DEFAULT nextval('medium_forma
 -- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
 --
 
-ALTER TABLE ONLY puid ALTER COLUMN id SET DEFAULT nextval('puid_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
 ALTER TABLE ONLY recording ALTER COLUMN id SET DEFAULT nextval('recording_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY recording_puid ALTER COLUMN id SET DEFAULT nextval('recording_puid_id_seq'::regclass);
 
 
 --
@@ -8235,13 +7961,6 @@ ALTER TABLE ONLY release_group_secondary_type ALTER COLUMN id SET DEFAULT nextva
 --
 
 ALTER TABLE ONLY release_label ALTER COLUMN id SET DEFAULT nextval('release_label_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY release_name ALTER COLUMN id SET DEFAULT nextval('release_name_id_seq'::regclass);
 
 
 --
@@ -8298,13 +8017,6 @@ ALTER TABLE ONLY tag ALTER COLUMN id SET DEFAULT nextval('tag_id_seq'::regclass)
 --
 
 ALTER TABLE ONLY track ALTER COLUMN id SET DEFAULT nextval('track_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY track_name ALTER COLUMN id SET DEFAULT nextval('track_name_id_seq'::regclass);
 
 
 --
@@ -8368,13 +8080,6 @@ ALTER TABLE ONLY work_attribute_type ALTER COLUMN id SET DEFAULT nextval('work_a
 --
 
 ALTER TABLE ONLY work_attribute_type_allowed_value ALTER COLUMN id SET DEFAULT nextval('work_attribute_type_allowed_value_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY work_name ALTER COLUMN id SET DEFAULT nextval('work_name_id_seq'::regclass);
 
 
 --
@@ -8880,14 +8585,6 @@ ALTER TABLE ONLY artist_meta
 
 
 --
--- Name: artist_name_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY artist_name
-    ADD CONSTRAINT artist_name_pkey PRIMARY KEY (id);
-
-
---
 -- Name: artist_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -8957,14 +8654,6 @@ ALTER TABLE ONLY cdtoc
 
 ALTER TABLE ONLY cdtoc_raw
     ADD CONSTRAINT cdtoc_raw_pkey PRIMARY KEY (id);
-
-
---
--- Name: clientversion_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY clientversion
-    ADD CONSTRAINT clientversion_pkey PRIMARY KEY (id);
 
 
 --
@@ -9584,14 +9273,6 @@ ALTER TABLE ONLY label_meta
 
 
 --
--- Name: label_name_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY label_name
-    ADD CONSTRAINT label_name_pkey PRIMARY KEY (id);
-
-
---
 -- Name: label_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -9728,14 +9409,6 @@ ALTER TABLE ONLY medium
 
 
 --
--- Name: puid_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY puid
-    ADD CONSTRAINT puid_pkey PRIMARY KEY (id);
-
-
---
 -- Name: recording_annotation_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -9765,14 +9438,6 @@ ALTER TABLE ONLY recording_meta
 
 ALTER TABLE ONLY recording
     ADD CONSTRAINT recording_pkey PRIMARY KEY (id);
-
-
---
--- Name: recording_puid_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY recording_puid
-    ADD CONSTRAINT recording_puid_pkey PRIMARY KEY (id);
 
 
 --
@@ -9928,14 +9593,6 @@ ALTER TABLE ONLY release_meta
 
 
 --
--- Name: release_name_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY release_name
-    ADD CONSTRAINT release_name_pkey PRIMARY KEY (id);
-
-
---
 -- Name: release_packaging_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -10040,14 +9697,6 @@ ALTER TABLE ONLY track_gid_redirect
 
 
 --
--- Name: track_name_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY track_name
-    ADD CONSTRAINT track_name_pkey PRIMARY KEY (id);
-
-
---
 -- Name: track_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -10149,14 +9798,6 @@ ALTER TABLE ONLY work_gid_redirect
 
 ALTER TABLE ONLY work_meta
     ADD CONSTRAINT work_meta_pkey PRIMARY KEY (id);
-
-
---
--- Name: work_name_pkey; Type: CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-ALTER TABLE ONLY work_name
-    ADD CONSTRAINT work_name_pkey PRIMARY KEY (id);
 
 
 --
@@ -10334,10 +9975,38 @@ CREATE UNIQUE INDEX artist_alias_idx_primary ON artist_alias USING btree (artist
 
 
 --
+-- Name: artist_credit_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_credit_idx_musicbrainz_collate ON artist_credit USING btree (musicbrainz_collate((name)::text));
+
+
+--
+-- Name: artist_credit_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_credit_idx_txt ON artist_credit USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
+
+
+--
 -- Name: artist_credit_name_idx_artist; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
 CREATE INDEX artist_credit_name_idx_artist ON artist_credit_name USING btree (artist);
+
+
+--
+-- Name: artist_credit_name_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_credit_name_idx_musicbrainz_collate ON artist_credit_name USING btree (musicbrainz_collate((name)::text));
+
+
+--
+-- Name: artist_credit_name_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_credit_name_idx_txt ON artist_credit_name USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
 
 
 --
@@ -10369,6 +10038,20 @@ CREATE UNIQUE INDEX artist_idx_gid ON artist USING btree (gid);
 
 
 --
+-- Name: artist_idx_lower_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_idx_lower_name ON artist USING btree (lower((name)::text));
+
+
+--
+-- Name: artist_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_idx_musicbrainz_collate ON artist USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: artist_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -10383,6 +10066,13 @@ CREATE UNIQUE INDEX artist_idx_null_comment ON artist USING btree (name) WHERE (
 
 
 --
+-- Name: artist_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_idx_page ON artist USING btree (page_index(name));
+
+
+--
 -- Name: artist_idx_sort_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -10390,45 +10080,17 @@ CREATE INDEX artist_idx_sort_name ON artist USING btree (sort_name);
 
 
 --
+-- Name: artist_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX artist_idx_txt ON artist USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
+
+
+--
 -- Name: artist_idx_uniq_name_comment; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
 CREATE UNIQUE INDEX artist_idx_uniq_name_comment ON artist USING btree (name, comment) WHERE (comment IS NOT NULL);
-
-
---
--- Name: artist_name_idx_lower_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX artist_name_idx_lower_name ON artist_name USING btree (lower((name)::text));
-
-
---
--- Name: artist_name_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX artist_name_idx_musicbrainz_collate ON artist_name USING btree (musicbrainz_collate((name)::text));
-
-
---
--- Name: artist_name_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX artist_name_idx_name ON artist_name USING btree (name);
-
-
---
--- Name: artist_name_idx_name_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX artist_name_idx_name_txt ON artist_name USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
-
-
---
--- Name: artist_name_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX artist_name_idx_page ON artist_name USING btree (page_index(name));
 
 
 --
@@ -11349,6 +11011,20 @@ CREATE UNIQUE INDEX label_idx_gid ON label USING btree (gid);
 
 
 --
+-- Name: label_idx_lower_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX label_idx_lower_name ON label USING btree (lower((name)::text));
+
+
+--
+-- Name: label_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX label_idx_musicbrainz_collate ON label USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: label_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11363,6 +11039,13 @@ CREATE UNIQUE INDEX label_idx_null_comment ON label USING btree (name) WHERE (co
 
 
 --
+-- Name: label_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX label_idx_page ON label USING btree (page_index(name));
+
+
+--
 -- Name: label_idx_sort_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11370,45 +11053,17 @@ CREATE INDEX label_idx_sort_name ON label USING btree (sort_name);
 
 
 --
+-- Name: label_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX label_idx_txt ON label USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
+
+
+--
 -- Name: label_idx_uniq_name_comment; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
 CREATE UNIQUE INDEX label_idx_uniq_name_comment ON label USING btree (name, comment) WHERE (comment IS NOT NULL);
-
-
---
--- Name: label_name_idx_lower_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX label_name_idx_lower_name ON label_name USING btree (lower((name)::text));
-
-
---
--- Name: label_name_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX label_name_idx_musicbrainz_collate ON label_name USING btree (musicbrainz_collate((name)::text));
-
-
---
--- Name: label_name_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX label_name_idx_name ON label_name USING btree (name);
-
-
---
--- Name: label_name_idx_name_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX label_name_idx_name_txt ON label_name USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
-
-
---
--- Name: label_name_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX label_name_idx_page ON label_name USING btree (page_index(name));
 
 
 --
@@ -11538,13 +11193,6 @@ CREATE INDEX medium_index_idx ON medium_index USING gist (toc);
 
 
 --
--- Name: puid_idx_puid; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX puid_idx_puid ON puid USING btree (puid);
-
-
---
 -- Name: recording_idx_artist_credit; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11559,6 +11207,13 @@ CREATE UNIQUE INDEX recording_idx_gid ON recording USING btree (gid);
 
 
 --
+-- Name: recording_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX recording_idx_musicbrainz_collate ON recording USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: recording_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11566,17 +11221,10 @@ CREATE INDEX recording_idx_name ON recording USING btree (name);
 
 
 --
--- Name: recording_puid_idx_puid; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+-- Name: recording_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
-CREATE INDEX recording_puid_idx_puid ON recording_puid USING btree (puid);
-
-
---
--- Name: recording_puid_idx_uniq; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX recording_puid_idx_uniq ON recording_puid USING btree (recording, puid);
+CREATE INDEX recording_idx_txt ON recording USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
 
 
 --
@@ -11636,10 +11284,31 @@ CREATE UNIQUE INDEX release_group_idx_gid ON release_group USING btree (gid);
 
 
 --
+-- Name: release_group_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX release_group_idx_musicbrainz_collate ON release_group USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: release_group_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
 CREATE INDEX release_group_idx_name ON release_group USING btree (name);
+
+
+--
+-- Name: release_group_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX release_group_idx_page ON release_group USING btree (page_index(name));
+
+
+--
+-- Name: release_group_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX release_group_idx_txt ON release_group USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
 
 
 --
@@ -11692,6 +11361,13 @@ CREATE UNIQUE INDEX release_idx_gid ON release USING btree (gid);
 
 
 --
+-- Name: release_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX release_idx_musicbrainz_collate ON release USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: release_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11699,10 +11375,24 @@ CREATE INDEX release_idx_name ON release USING btree (name);
 
 
 --
+-- Name: release_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX release_idx_page ON release USING btree (page_index(name));
+
+
+--
 -- Name: release_idx_release_group; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
 CREATE INDEX release_idx_release_group ON release USING btree (release_group);
+
+
+--
+-- Name: release_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX release_idx_txt ON release USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
 
 
 --
@@ -11717,34 +11407,6 @@ CREATE INDEX release_label_idx_label ON release_label USING btree (label);
 --
 
 CREATE INDEX release_label_idx_release ON release_label USING btree (release);
-
-
---
--- Name: release_name_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX release_name_idx_musicbrainz_collate ON release_name USING btree (musicbrainz_collate((name)::text));
-
-
---
--- Name: release_name_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX release_name_idx_name ON release_name USING btree (name);
-
-
---
--- Name: release_name_idx_name_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX release_name_idx_name_txt ON release_name USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
-
-
---
--- Name: release_name_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX release_name_idx_page ON release_name USING btree (page_index(name));
 
 
 --
@@ -11832,6 +11494,13 @@ CREATE INDEX track_idx_medium ON track USING btree (medium, "position");
 
 
 --
+-- Name: track_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX track_idx_musicbrainz_collate ON track USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: track_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11846,24 +11515,10 @@ CREATE INDEX track_idx_recording ON track USING btree (recording);
 
 
 --
--- Name: track_name_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+-- Name: track_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
-CREATE INDEX track_name_idx_musicbrainz_collate ON track_name USING btree (musicbrainz_collate((name)::text));
-
-
---
--- Name: track_name_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX track_name_idx_name ON track_name USING btree (name);
-
-
---
--- Name: track_name_idx_name_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX track_name_idx_name_txt ON track_name USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
+CREATE INDEX track_idx_txt ON track USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
 
 
 --
@@ -11937,6 +11592,13 @@ CREATE UNIQUE INDEX work_idx_gid ON work USING btree (gid);
 
 
 --
+-- Name: work_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+--
+
+CREATE INDEX work_idx_musicbrainz_collate ON work USING btree (musicbrainz_collate((name)::text));
+
+
+--
 -- Name: work_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
@@ -11944,31 +11606,17 @@ CREATE INDEX work_idx_name ON work USING btree (name);
 
 
 --
--- Name: work_name_idx_musicbrainz_collate; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+-- Name: work_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
-CREATE INDEX work_name_idx_musicbrainz_collate ON work_name USING btree (musicbrainz_collate((name)::text));
-
-
---
--- Name: work_name_idx_name; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE UNIQUE INDEX work_name_idx_name ON work_name USING btree (name);
+CREATE INDEX work_idx_page ON work USING btree (page_index(name));
 
 
 --
--- Name: work_name_idx_name_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
+-- Name: work_idx_txt; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
 --
 
-CREATE INDEX work_name_idx_name_txt ON work_name USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
-
-
---
--- Name: work_name_idx_page; Type: INDEX; Schema: musicbrainz; Owner: musicbrainz; Tablespace: 
---
-
-CREATE INDEX work_name_idx_page ON work_name USING btree (page_index(name));
+CREATE INDEX work_idx_txt ON work USING gin (to_tsvector('mb_simple'::regconfig, (name)::text));
 
 
 --
@@ -12716,6 +12364,41 @@ CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON area FOR EACH R
 -- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
 --
 
+CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON link FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+
+--
+-- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
+--
+
+CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON area_alias FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+
+--
+-- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
+--
+
+CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON artist_alias FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+
+--
+-- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
+--
+
+CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON label_alias FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+
+--
+-- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
+--
+
+CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON work_alias FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+
+--
+-- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
+--
+
 CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON artist FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
 
 
@@ -12724,13 +12407,6 @@ CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON artist FOR EACH
 --
 
 CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON label FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
-
-
---
--- Name: end_date_implies_ended; Type: TRIGGER; Schema: musicbrainz; Owner: musicbrainz
---
-
-CREATE TRIGGER end_date_implies_ended BEFORE INSERT OR UPDATE ON link FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
 
 
 --
@@ -13244,22 +12920,6 @@ ALTER TABLE ONLY artist_alias
 
 
 --
--- Name: artist_alias_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist_alias
-    ADD CONSTRAINT artist_alias_fk_name FOREIGN KEY (name) REFERENCES artist_name(id);
-
-
---
--- Name: artist_alias_fk_sort_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist_alias
-    ADD CONSTRAINT artist_alias_fk_sort_name FOREIGN KEY (sort_name) REFERENCES artist_name(id);
-
-
---
 -- Name: artist_alias_fk_type; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -13284,14 +12944,6 @@ ALTER TABLE ONLY artist_annotation
 
 
 --
--- Name: artist_credit_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist_credit
-    ADD CONSTRAINT artist_credit_fk_name FOREIGN KEY (name) REFERENCES artist_name(id);
-
-
---
 -- Name: artist_credit_name_fk_artist; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -13305,22 +12957,6 @@ ALTER TABLE ONLY artist_credit_name
 
 ALTER TABLE ONLY artist_credit_name
     ADD CONSTRAINT artist_credit_name_fk_artist_credit FOREIGN KEY (artist_credit) REFERENCES artist_credit(id) ON DELETE CASCADE;
-
-
---
--- Name: artist_credit_name_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist_credit_name
-    ADD CONSTRAINT artist_credit_name_fk_name FOREIGN KEY (name) REFERENCES artist_name(id);
-
-
---
--- Name: artist_deletion_fk_last_known_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist_deletion
-    ADD CONSTRAINT artist_deletion_fk_last_known_name FOREIGN KEY (last_known_name) REFERENCES artist_name(id);
 
 
 --
@@ -13353,22 +12989,6 @@ ALTER TABLE ONLY artist
 
 ALTER TABLE ONLY artist
     ADD CONSTRAINT artist_fk_gender FOREIGN KEY (gender) REFERENCES gender(id);
-
-
---
--- Name: artist_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist
-    ADD CONSTRAINT artist_fk_name FOREIGN KEY (name) REFERENCES artist_name(id);
-
-
---
--- Name: artist_fk_sort_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY artist
-    ADD CONSTRAINT artist_fk_sort_name FOREIGN KEY (sort_name) REFERENCES artist_name(id);
 
 
 --
@@ -14852,22 +14472,6 @@ ALTER TABLE ONLY label_alias
 
 
 --
--- Name: label_alias_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY label_alias
-    ADD CONSTRAINT label_alias_fk_name FOREIGN KEY (name) REFERENCES label_name(id);
-
-
---
--- Name: label_alias_fk_sort_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY label_alias
-    ADD CONSTRAINT label_alias_fk_sort_name FOREIGN KEY (sort_name) REFERENCES label_name(id);
-
-
---
 -- Name: label_alias_fk_type; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -14892,35 +14496,11 @@ ALTER TABLE ONLY label_annotation
 
 
 --
--- Name: label_deletion_fk_last_known_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY label_deletion
-    ADD CONSTRAINT label_deletion_fk_last_known_name FOREIGN KEY (last_known_name) REFERENCES label_name(id);
-
-
---
 -- Name: label_fk_area; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
 ALTER TABLE ONLY label
     ADD CONSTRAINT label_fk_area FOREIGN KEY (area) REFERENCES area(id);
-
-
---
--- Name: label_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY label
-    ADD CONSTRAINT label_fk_name FOREIGN KEY (name) REFERENCES label_name(id);
-
-
---
--- Name: label_fk_sort_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY label
-    ADD CONSTRAINT label_fk_sort_name FOREIGN KEY (sort_name) REFERENCES label_name(id);
 
 
 --
@@ -15156,14 +14736,6 @@ ALTER TABLE ONLY medium_index
 
 
 --
--- Name: puid_fk_version; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY puid
-    ADD CONSTRAINT puid_fk_version FOREIGN KEY (version) REFERENCES clientversion(id);
-
-
---
 -- Name: recording_annotation_fk_annotation; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -15188,14 +14760,6 @@ ALTER TABLE ONLY recording
 
 
 --
--- Name: recording_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY recording
-    ADD CONSTRAINT recording_fk_name FOREIGN KEY (name) REFERENCES track_name(id);
-
-
---
 -- Name: recording_gid_redirect_fk_new_id; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -15209,22 +14773,6 @@ ALTER TABLE ONLY recording_gid_redirect
 
 ALTER TABLE ONLY recording_meta
     ADD CONSTRAINT recording_meta_fk_id FOREIGN KEY (id) REFERENCES recording(id) ON DELETE CASCADE;
-
-
---
--- Name: recording_puid_fk_puid; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY recording_puid
-    ADD CONSTRAINT recording_puid_fk_puid FOREIGN KEY (puid) REFERENCES puid(id);
-
-
---
--- Name: recording_puid_fk_recording; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY recording_puid
-    ADD CONSTRAINT recording_puid_fk_recording FOREIGN KEY (recording) REFERENCES recording(id);
 
 
 --
@@ -15340,14 +14888,6 @@ ALTER TABLE ONLY release
 
 
 --
--- Name: release_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY release
-    ADD CONSTRAINT release_fk_name FOREIGN KEY (name) REFERENCES release_name(id);
-
-
---
 -- Name: release_fk_packaging; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -15409,14 +14949,6 @@ ALTER TABLE ONLY release_group_annotation
 
 ALTER TABLE ONLY release_group
     ADD CONSTRAINT release_group_fk_artist_credit FOREIGN KEY (artist_credit) REFERENCES artist_credit(id);
-
-
---
--- Name: release_group_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY release_group
-    ADD CONSTRAINT release_group_fk_name FOREIGN KEY (name) REFERENCES release_name(id);
 
 
 --
@@ -15636,14 +15168,6 @@ ALTER TABLE ONLY track
 
 
 --
--- Name: track_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY track
-    ADD CONSTRAINT track_fk_name FOREIGN KEY (name) REFERENCES track_name(id);
-
-
---
 -- Name: track_fk_recording; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
 --
 
@@ -15689,22 +15213,6 @@ ALTER TABLE ONLY vote
 
 ALTER TABLE ONLY vote
     ADD CONSTRAINT vote_fk_editor FOREIGN KEY (editor) REFERENCES editor(id);
-
-
---
--- Name: work_alias_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY work_alias
-    ADD CONSTRAINT work_alias_fk_name FOREIGN KEY (name) REFERENCES work_name(id);
-
-
---
--- Name: work_alias_fk_sort_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY work_alias
-    ADD CONSTRAINT work_alias_fk_sort_name FOREIGN KEY (sort_name) REFERENCES work_name(id);
 
 
 --
@@ -15777,14 +15285,6 @@ ALTER TABLE ONLY work_attribute_type_allowed_value
 
 ALTER TABLE ONLY work
     ADD CONSTRAINT work_fk_language FOREIGN KEY (language) REFERENCES language(id);
-
-
---
--- Name: work_fk_name; Type: FK CONSTRAINT; Schema: musicbrainz; Owner: musicbrainz
---
-
-ALTER TABLE ONLY work
-    ADD CONSTRAINT work_fk_name FOREIGN KEY (name) REFERENCES work_name(id);
 
 
 --

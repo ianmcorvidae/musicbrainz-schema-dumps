@@ -1,0 +1,13 @@
+Mon Sep 9 07:20:19 MST 2013 : Disabling last_updated triggers
+Mon Sep 9 07:20:21 MST 2013 : DROP TABLE puid;
+Mon Sep 9 07:20:22 MST 2013 : Remove _name tables and regenerate name columns
+Mon Sep 9 07:20:27 MST 2013 : Mark deleted editors more accurately
+Mon Sep 9 07:20:28 MST 2013 : Adding ended columns for alias
+Mon Sep 9 07:20:30 MST 2013 : Enabling last_updated triggers
+Mon Sep 9 07:20:31 MST 2013 : Recreating constraints/triggers for regenerated tables with name columns
+Mon Sep 9 07:20:32 MST 2013 : Going to schema sequence 19
+UPDATE 1
+Mon Sep 9 07:20:33 MST 2013 : Vacuuming DB.
+VACUUM
+Mon Sep 9 07:20:34 MST 2013 : Done
+Mon Sep 9 07:20:34 MST 2013 : UPDATE THE DB_SCHEMA_SEQUENCE IN DBDefs.pm TO 19 !
